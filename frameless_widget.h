@@ -1,7 +1,7 @@
 #ifndef FRAMELESS_WIDGET_H
 #define FRAMELESS_WIDGET_H
 
-#include <QWidget>
+#include <QDialog>
 #include <QPushButton>
 #include <QLabel>
 #include <QVBoxLayout>
@@ -10,7 +10,7 @@
 #include <QMouseEvent>
 #include <QPoint>
 
-class FramelessWidget : public QWidget
+class FramelessWidget : public QDialog
 {
 public:
     explicit FramelessWidget(QString title,
@@ -30,6 +30,7 @@ private:
     void InitUI();
     void InitStyleSheet();
     bool CheckDragPos(QPoint);
+    bool CheckScalePos(QPoint);
 
 private slots:
     void on_btn_min_clicked();
@@ -46,7 +47,9 @@ private:
     QLabel *m_label_title;
     QSpacerItem *m_spacer;
     QPoint m_drag_pos;
+    QPoint m_scale_pos;
     bool m_drag;
+    bool m_scale;
     QString m_title, m_app_icon, m_min_icon, m_max_icon, m_normal_icon, m_close_icon, m_style_sheet;
     enum class ShowState {max, normal} m_show_state;
 };
@@ -87,10 +90,22 @@ inline bool FramelessWidget::CheckDragPos(QPoint pos)
     return m_spacer->geometry().contains(pos);
 }
 
+bool FramelessWidget::CheckScalePos(QPoint pos)
+{
+    QRect rect = this->geometry();
+    QPoint right_bottom_corner = QPoint(rect.x() + rect.width(), rect.y() + rect.height());
+
+    int h_away = right_bottom_corner.x() - pos.x();
+    int v_away = right_bottom_corner.y() - pos.y();
+
+    return h_away >= 0 && h_away <= 10 &&
+           v_away >= 0 && v_away <= 10;
+}
+
 FramelessWidget::FramelessWidget(QString title,
                                  QString app_icon, QString min_icon, QString max_icon, QString normal_icon, QString close_icon,
                                  QWidget *parent) :
-    QWidget(parent), m_title(title), m_app_icon(app_icon), m_min_icon(min_icon), m_max_icon(max_icon), m_normal_icon(normal_icon), m_close_icon(close_icon)
+    QDialog(parent), m_title(title), m_app_icon(app_icon), m_min_icon(min_icon), m_max_icon(max_icon), m_normal_icon(normal_icon), m_close_icon(close_icon)
 {
     m_layout = new QVBoxLayout(this);
     m_layout_2 = new QHBoxLayout(this);
@@ -101,6 +116,7 @@ FramelessWidget::FramelessWidget(QString title,
     m_label_title = new QLabel(this);
     m_spacer = new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_drag = false;
+    m_scale = false;
     m_show_state = ShowState::normal;
 
     InitStyleSheet();
@@ -121,10 +137,23 @@ void FramelessWidget::SetCentralWidget(QWidget *w)
 inline void FramelessWidget::mousePressEvent(QMouseEvent *event)
 {
     QPoint pos = event->pos();
+    QPoint global_pos = event->globalPos();
     if(CheckDragPos(pos))
     {
         m_drag = true;
+#if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
         m_drag_pos = event->globalPosition().toPoint() - this->pos();
+#else
+        m_drag_pos = event->globalPos() - this->pos();
+#endif
+    }
+    else if (CheckScalePos(global_pos))
+    {
+        QRect rect = this->geometry();
+        QPoint right_bottom_corner = QPoint(rect.x() + rect.width(), rect.y() + rect.height());
+
+        m_scale_pos = QPoint(right_bottom_corner.x() - global_pos.x(), right_bottom_corner.y() - global_pos.y());
+        m_scale = true;
     }
 
     event->accept();
@@ -134,8 +163,27 @@ inline void FramelessWidget::mouseMoveEvent(QMouseEvent *event)
 {
     if (m_drag)
     {
-        QPoint newPos = event->globalPosition().toPoint() - m_drag_pos;
-        this->move(newPos);
+        if (m_show_state == ShowState::max)
+        {
+            this->showNormal();
+            m_show_state = ShowState::normal;
+            m_btn_max->setIcon(QIcon(m_max_icon));
+        }
+        else
+        {
+#if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
+            QPoint newPos = event->globalPosition().toPoint() - m_drag_pos;
+#else
+            QPoint newPos = event->globalPos() - m_drag_pos;
+#endif
+            this->move(newPos);
+        }
+    }
+    else if (m_scale)
+    {
+        QPoint new_right_bottom_corner = event->globalPos() + m_scale_pos;
+        QPoint cur_pos = this->pos();
+        this->resize(new_right_bottom_corner.x() - cur_pos.x(), new_right_bottom_corner.y() - cur_pos.y());
     }
 
     event->accept();
@@ -181,6 +229,7 @@ void FramelessWidget::InitUI()
     this->setLayout(m_layout);
     this->setWindowFlags(Qt::FramelessWindowHint);
     this->setStyleSheet(m_style_sheet);
+    this->setWindowIcon(QIcon(m_app_icon));
 }
 
 void FramelessWidget::on_btn_min_clicked()
