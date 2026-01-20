@@ -13,6 +13,13 @@
 class FramelessWidget : public QDialog
 {
 public:
+    enum class BtnType{
+        kMin,
+        kMax,
+        kClose,
+        kAll
+    };
+
     explicit FramelessWidget(QString title,
                              QString app_icon, QString min_icon, QString max_icon, QString normal_icon, QString close_icon,
                              QWidget *parent = nullptr);
@@ -20,6 +27,8 @@ public:
     virtual ~FramelessWidget();
 
     void SetCentralWidget(QWidget *w);
+
+    void SetBtnVisiable(BtnType, bool visiable);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -29,6 +38,7 @@ protected:
 private:
     void InitUI();
     void InitStyleSheet();
+    void InitConnect();
     bool CheckDragPos(QPoint);
     bool CheckScalePos(QPoint);
 
@@ -55,12 +65,13 @@ private:
 };
 
 //style sheet
-void FramelessWidget::InitStyleSheet()
+inline void FramelessWidget::InitStyleSheet()
 {
     m_style_sheet =
     R"(
         #frameless_widget {
             background-color:rgb(255,255,255);
+            border:1px solid rgb(200,200,200);
         }
 
         #label_icon {
@@ -68,9 +79,14 @@ void FramelessWidget::InitStyleSheet()
             max-height:25px;
         }
 
-        QPushButton {
+        #label_title
+        {
+            font-size: 14px;
+        }
+
+        #frameless_widget QPushButton {
             border:none;
-            min-height:25px;
+            min-height:27px;
             min-width:27px;
             background-color:rgb(255,255,255,0);
         }
@@ -85,12 +101,19 @@ void FramelessWidget::InitStyleSheet()
     )";
 }
 
+inline void FramelessWidget::InitConnect()
+{
+    connect(m_btn_min, &QPushButton::clicked, this, &FramelessWidget::on_btn_min_clicked);
+    connect(m_btn_max, &QPushButton::clicked, this, &FramelessWidget::on_btn_max_clicked);
+    connect(m_btn_close, &QPushButton::clicked, this, &FramelessWidget::on_btn_close_clicked);
+}
+
 inline bool FramelessWidget::CheckDragPos(QPoint pos)
 {
     return m_spacer->geometry().contains(pos);
 }
 
-bool FramelessWidget::CheckScalePos(QPoint pos)
+inline bool FramelessWidget::CheckScalePos(QPoint pos)
 {
     QRect rect = this->geometry();
     QPoint right_bottom_corner = QPoint(rect.x() + rect.width(), rect.y() + rect.height());
@@ -102,7 +125,7 @@ bool FramelessWidget::CheckScalePos(QPoint pos)
            v_away >= 0 && v_away <= 10;
 }
 
-FramelessWidget::FramelessWidget(QString title,
+inline FramelessWidget::FramelessWidget(QString title,
                                  QString app_icon, QString min_icon, QString max_icon, QString normal_icon, QString close_icon,
                                  QWidget *parent) :
     QDialog(parent), m_title(title), m_app_icon(app_icon), m_min_icon(min_icon), m_max_icon(max_icon), m_normal_icon(normal_icon), m_close_icon(close_icon)
@@ -119,19 +142,42 @@ FramelessWidget::FramelessWidget(QString title,
     m_scale = false;
     m_show_state = ShowState::normal;
 
+    InitConnect();
     InitStyleSheet();
     InitUI();
 }
 
-FramelessWidget::~FramelessWidget()
+inline FramelessWidget::~FramelessWidget()
 {
 
 }
 
-void FramelessWidget::SetCentralWidget(QWidget *w)
+inline void FramelessWidget::SetCentralWidget(QWidget *w)
 {
     m_layout->addWidget(w);
     w->setParent(this);
+}
+
+inline void FramelessWidget::SetBtnVisiable(FramelessWidget::BtnType btn_type, bool visiable)
+{
+    if (btn_type == BtnType::kAll)
+    {
+        m_btn_min->setVisible(visiable);
+        m_btn_max->setVisible(visiable);
+        m_btn_close->setVisible(visiable);
+    }
+    else if (btn_type == BtnType::kMin)
+    {
+        m_btn_min->setVisible(visiable);
+    }
+    else if (btn_type == BtnType::kMax)
+    {
+        m_btn_max->setVisible(visiable);
+    }
+    else if (btn_type == BtnType::kClose)
+    {
+        m_btn_close->setVisible(visiable);
+    }
 }
 
 inline void FramelessWidget::mousePressEvent(QMouseEvent *event)
@@ -166,6 +212,7 @@ inline void FramelessWidget::mouseMoveEvent(QMouseEvent *event)
         if (m_show_state == ShowState::max)
         {
             this->showNormal();
+            this->resize(900,600);
             m_show_state = ShowState::normal;
             m_btn_max->setIcon(QIcon(m_max_icon));
         }
@@ -195,7 +242,7 @@ inline void FramelessWidget::mouseReleaseEvent(QMouseEvent *event)
     event->accept();
 }
 
-void FramelessWidget::InitUI()
+inline void FramelessWidget::InitUI()
 {
     m_label_icon->setObjectName("label_icon");
     m_label_title->setText(m_title);
@@ -213,31 +260,28 @@ void FramelessWidget::InitUI()
     m_layout_2->setContentsMargins(4,0,0,0);
 
     m_layout->addLayout(m_layout_2);
-    m_layout->setSpacing(0);
-    m_layout->setContentsMargins(0,0,0,0);
+    m_layout->setSpacing(3);
+    m_layout->setContentsMargins(1, 1, 1, 1);
 
     m_label_icon->setPixmap(QPixmap(m_app_icon));
     m_btn_min->setIcon(QIcon(m_min_icon));
     m_btn_max->setIcon(QIcon(m_max_icon));
     m_btn_close->setIcon(QIcon(m_close_icon));
 
-    connect(m_btn_min, &QPushButton::clicked, this, &FramelessWidget::on_btn_min_clicked);
-    connect(m_btn_max, &QPushButton::clicked, this, &FramelessWidget::on_btn_max_clicked);
-    connect(m_btn_close, &QPushButton::clicked, this, &FramelessWidget::on_btn_close_clicked);
-
     this->setObjectName("frameless_widget");
     this->setLayout(m_layout);
     this->setWindowFlags(Qt::FramelessWindowHint);
     this->setStyleSheet(m_style_sheet);
     this->setWindowIcon(QIcon(m_app_icon));
+    this->resize(900, 600);
 }
 
-void FramelessWidget::on_btn_min_clicked()
+inline void FramelessWidget::on_btn_min_clicked()
 {
     this->showMinimized();
 }
 
-void FramelessWidget::on_btn_max_clicked()
+inline void FramelessWidget::on_btn_max_clicked()
 {
     if (m_show_state == ShowState::normal)
     {
@@ -253,7 +297,7 @@ void FramelessWidget::on_btn_max_clicked()
     }
 }
 
-void FramelessWidget::on_btn_close_clicked()
+inline void FramelessWidget::on_btn_close_clicked()
 {
     this->close();
 }
